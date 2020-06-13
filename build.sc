@@ -112,7 +112,11 @@ object implicits extends Module {
   trait ImplicitsModule extends CommonPublishModule{
     def compileIvyDeps = Agg(
       ivy"com.lihaoyi::acyclic:${acyclicVersion(scalaVersion())}",
-      ivy"org.scala-lang:scala-reflect:${scalaVersion()}"
+      ivy"org.scala-lang:scala-reflect:${scalaVersion()}",
+      // Needed for @XmlTransient and @Transient in java9+
+      ivy"com.sun.xml.bind:jaxb-core:2.3.0.1",
+      ivy"com.sun.xml.bind:jaxb-impl:2.3.1",
+      ivy"javax.xml.bind:jaxb-api:2.3.1",
     )
     def generatedSources = T{
       val dir = T.ctx().dest

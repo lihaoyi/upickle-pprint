@@ -25,6 +25,61 @@ object JvmExampleTests extends TestSuite {
       read[Thing](f) ==> Thing(1, "gg")
       read[Thing](f.toFile) ==> Thing(1, "gg")
     }
+    test("JavaBean") {
+      import collection.JavaConverters._
+      import upickle.default._
+
+      val bean: JavaBean = new JavaBean()
+
+      bean.setName("Hello World")
+      bean.setNumber(123)
+      bean.setBool(true)
+      bean.setJavaEnum(JavaEnum.ONE)
+
+      bean.setChildren(Vector({
+        val child: JavaBean = new JavaBean()
+        child.setName("Hello World Child")
+        child
+      }).asJava)
+      bean.setList(Vector("aa", "bb", "cc").asJava)
+      bean.getListWithoutSetter().addAll(Vector("One", "Two", "Three").asJava)
+
+      bean.setIgnoredProtectedTransientAnnotationField("ignoredProtectedTransientAnnotation")
+      bean.setIgnoredProtectedXmlTransientAnnotationField("ignoredProtectedXmlTransientAnnotation")
+      bean.setIgnoredProtectedTransientField("ignoredProtectedTransient")
+
+      bean.setIgnoredPublicTransientAnnotationField("ignoredPublicTransientAnnotation")
+      bean.setIgnoredPublicXmlTransientAnnotationField("ignoredPublicXmlTransientAnnotation")
+      bean.setIgnoredPublicTransientField("ignoredPublicTransient")
+
+      bean.setShadowedInterfaceMethod("not transient")
+
+      // Round trip test
+      val serialized: String = write(bean)
+      val bean2: JavaBean = read[JavaBean](serialized)
+
+      // Test primitive fields
+      bean2.getName              ==> bean.getName
+      bean2.getNumber            ==> bean.getNumber
+      bean2.isBool               ==> bean.isBool
+      bean2.getJavaEnum          ==> bean.getJavaEnum
+
+      // Test collection fields
+      bean2.getChildren.get(0).getName() ==> bean.getChildren.get(0).getName()
+      bean2.getList.asScala              ==> bean.getList.asScala
+      bean2.getListWithoutSetter.asScala ==> bean.getListWithoutSetter.asScala
+
+      // Test ignore - transient fields
+      bean2.getIgnoredProtectedTransientAnnotationField    ==> null
+      bean2.getIgnoredProtectedXmlTransientAnnotationField ==> null
+      bean2.getIgnoredProtectedTransientField              ==> null
+      bean2.getIgnoredPublicTransientAnnotationField       ==> null
+      bean2.getIgnoredPublicXmlTransientAnnotationField    ==> null
+      bean2.getIgnoredPublicTransientField                 ==> null
+
+      // Test other - special fields
+      bean2.getShadowedInterfaceMethod ==> "not transient"
+    }
     test("other"){
       test("argonaut"){
         import ujson.argonaut.ArgonautJson

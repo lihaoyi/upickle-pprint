@@ -1,6 +1,8 @@
 package upickle
+
+import upickle.Scala_2_11_Compat._
 import utest._
-import acyclic.file
+
 /**
 * Created by haoyi on 4/22/14.
 */
@@ -31,6 +33,10 @@ class TestUtil[Api <: upickle.Api](val api: Api){
       val normalizedReadString = normalize(readS)
       val normalizedValue = normalize(t)
       assert(normalizedReadString == normalizedValue)
+
+      def normalized(value: T): Boolean = normalize(value) == normalizedValue
+      assert(exists(api.readEither[T](s), normalized))
+      assert(api.readTry[T](s).toOption exists normalized)
     }
 
     val normalizedReadWrittenT = normalize(api.read[T](writtenT))
@@ -46,7 +52,6 @@ class TestUtil[Api <: upickle.Api](val api: Api){
       case _ => assert(roundTrippedBinary == t)
     }
 
-
     // Test binary-JSON equivalence
     if (checkBinaryJson){
       val rewrittenBinary = api.writeBinary(roundTrippedBinary)
@@ -55,5 +60,22 @@ class TestUtil[Api <: upickle.Api](val api: Api){
       val rewrittenBinaryStr = upickle.core.Util.bytesToString(rewrittenBinary)
       assert(writtenBinaryStr == rewrittenBinaryStr)
     }
+  }
+}
+
+object Scala_2_11_Compat {
+  import scala.util.{Failure, Success, Try}
+
+  def exists[L, R](either: Either[L, R], p: R => Boolean): Boolean = either match {
+    case Right(b) => p(b)
+    case _ => false
+  }
+  def toEither[A](`try`: Try[A]): Either[Throwable, A] = `try` match {
+    case Success(r) => Right(r)
+    case Failure(e) => Left(e)
+  }
+  def swap[L, R](either: Either[L, R]): Either[R, L] = either match {
+    case Right(r) => Left(r)
+    case Left(l) => Right(l)
   }
 }

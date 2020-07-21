@@ -237,7 +237,6 @@ object Visitor{
 trait ObjVisitor[-T, +J] extends ObjArrVisitor[T, J] {
 
   /**
-    * @param s     the value of the key
     * @param index json source position at the start of the key being visited
     */
   def visitKey(index: Int): Visitor[_, _]

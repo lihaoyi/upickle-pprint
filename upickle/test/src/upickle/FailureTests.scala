@@ -1,10 +1,13 @@
 package upickle
 
-import utest._
-import upickle.legacy.read
-import acyclic.file
-import ujson.{IncompleteParseException, ParseException}
+import scala.reflect.ClassTag
+
+import ujson.{IncompleteParseException, ParseException, ParsingFailedException}
+import upickle.Scala_2_11_Compat._
 import upickle.core.AbortException
+import upickle.legacy.{read, readEither, readTry}
+import utest._
+
 case class Fee(i: Int, s: String)
 object Fee{
   implicit def rw: upickle.legacy.ReadWriter[Fee] = upickle.legacy.macroRW
@@ -36,7 +39,20 @@ object FailureTests extends TestSuite {
 //      read[ujson.Value](""" {unquoted_key: "keys must be quoted"} """)
 //    }
 
-    test("jsonFailures"){
+    test("jsonFailures") {
+      def checkFailure[E <: ParsingFailedException : ClassTag](failureCase: String): E = {
+        val err = intercept[E](read[ujson.Value](failureCase))
+        val errEither = readEither[ujson.Value](failureCase)
+        val errTry = readTry[ujson.Value](failureCase)
+
+        val msg = err.getMessage
+        assert(errEither.isLeft)
+        assert(exists(swap(errEither), (_: String) == msg))
+        assert(errTry.isFailure)
+        assert(exists(swap(toEither(errTry)), (_: Throwable).getMessage == msg))
+        err
+      }
+
       // Run through the test cases from the json.org validation suite,
       // skipping the ones which we don't support yet (e.g. leading zeroes,
       // extra commas) or will never support (e.g. too deep)
@@ -80,30 +96,39 @@ object FailureTests extends TestSuite {
       val res =
         for(failureCase <- failureCases)
         yield try {
-          intercept[ParseException] { read[ujson.Value](failureCase) }
+          checkFailure[ParseException](failureCase)
           None
-        }catch{
+        } catch {
           case _:Throwable =>
           Some(failureCase)
         }
 
       val nonFailures = res.flatten
       assert(nonFailures.isEmpty)
-      intercept[IncompleteParseException]{read[ujson.Value](""" {"Comma instead if closing brace": true, """)}
-      intercept[IncompleteParseException]{read[ujson.Value](""" ["Unclosed array" """)}
+
+      checkFailure[IncompleteParseException](""" {"Comma instead if closing brace": true, """)
+      checkFailure[IncompleteParseException](""" ["Unclosed array" """)
     }
 
     test("facadeFailures"){
-      def assertErrorMsg[T: upickle.legacy.Reader](s: String, msgs: String*) = {
-        val err = intercept[AbortException] { upickle.legacy.read[T](s) }
-        for (msg <- msgs) assert(err.getMessage.contains(msg))
+      def assertErrorMsg[T: upickle.legacy.Reader](s: String, msgs: String*): Unit =
+        assertMsg(upickle.legacy, s, msgs: _*)
+      def assertErrorMsgDefault[T: upickle.default.Reader](s: String, msgs: String*): Unit =
+        assertMsg(upickle.default, s, msgs: _*)
+      def assertMsg[A <: Api, T](api: A, s: String, msgs: String*)(implicit reader: api.Reader[T]): Unit = {
+        import api.{read, readEither, readTry}
+        def r = read(s)
+        val err = intercept[AbortException](r)
+        val errEither = readEither(s)
+        val errTry = readTry(s)
 
-        err
-      }
-      def assertErrorMsgDefault[T: upickle.default.Reader](s: String, msgs: String*) = {
-        val err = intercept[AbortException] { upickle.default.read[T](s) }
-        for (msg <- msgs) assert(err.getMessage.contains(msg))
-        err
+        for (msg <- msgs) {
+          assert(err.getMessage.contains(msg))
+          assert(errEither.isLeft)
+          assert(exists(swap(errEither), (_: String) contains msg))
+          assert(errTry.isFailure)
+          assert(exists(swap(toEither(errTry)), (_: Throwable).getMessage contains msg))
+        }
       }
       test("structs"){
         test - assertErrorMsg[Boolean]("\"lol\"", "expected boolean got string at index 0")
